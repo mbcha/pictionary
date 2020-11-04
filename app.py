@@ -1,6 +1,6 @@
-from flask import Flask, request, jsonify
-app = Flask(__name__)
-
+from flask import Flask, request, jsonify, render_template
+# app = Flask(__name__)
+app = Flask(__name__, static_folder='dist/static', template_folder='dist')
 
 @app.route('/getmsg/', methods=['GET'])
 def respond():
@@ -25,7 +25,6 @@ def respond():
     # Return the response in json format
     return jsonify(response)
 
-
 @app.route('/post/', methods=['POST'])
 def post_something():
     param = request.form.get('name')
@@ -35,7 +34,7 @@ def post_something():
         return jsonify({
             "Message": f"Welcome {name} to our awesome platform!!",
             # Add this option to distinct the POST request
-            "METHOD": "POST"
+            "METHOD" : "POST"
         })
     else:
         return jsonify({
@@ -43,12 +42,9 @@ def post_something():
         })
 
 # A welcome message to test our server
-
-
 @app.route('/')
 def index():
-    return "<h1>Welcome to our server !!</h1>"
-
+    return render_template('index.html')
 
 if __name__ == '__main__':
     # Threaded option to enable multiple instances for multiple user access support
