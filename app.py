@@ -228,41 +228,41 @@ def logout():
 def get_teams():
     teams = Team.query.all()
 
-    teams_info = []
-    for team in teams:
-        info = {'id': team.id, 'name': team.name, 'score': team.score, 'players': []}
-        for player in team.players :
-            info['players'].append({ 'id': player.id, 'name': player.name })
-
-        teams_info.append(info)
-
-    return make_response(jsonify(teams_info), 200)
-
-
-@app.route('/api/select_player/', methods=['GET'])
-def get_player():
     import random
     last_play = LastPlay.query.one()
 
-    if last_play :
-        team = last_play.team
-        players = team.players.filter(Player.id != last_play.player_id).all()
-    else :
-        team = Team.query.first()
-        players = team.players.all()
+    if last_play:
+        last_team = last_play.team
+        possible_teams = Team.query.filter(Team.id != last_team.id).all()
+        active_team = possible_teams[0]
+        for pt in possible_teams :
+            if pt != active_team and len(pt.words.all()) < len(active_team.words.all()) :
+                active_team = pt
+    else:
+        active_team = Team.query.first()
+
+    players = active_team.players.all()
 
     amount_of_words = 0
     random_player = random.choice(players)
-    selected_player = {'id': random_player.id, 'name': random_player.name}
+    selected_player = random_player
 
     for player in players:
         player_words = len(player.words.all())
         if player_words > amount_of_words:
             amount_of_words = player_words
-            selected_player = {'id': player.id, 'name': player.name}
+            selected_player = player
 
-    return make_response(jsonify(selected_player), 200)
+    teams_info = []
+    for team in teams:
+        info = {'id': team.id, 'name': team.name, 'score': team.score, 'players': []}
+        for player in team.players :
+            active = player.id == selected_player.id
+            info['players'].append({ 'id': player.id, 'name': player.name, 'email': player.email, 'active': active })
 
+        teams_info.append(info)
+
+    return make_response(jsonify(teams_info), 200)
 
 
 @app.route('/api/save_word/', methods=['POST'])
