@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="column is-4 is-offset-4">
+  <h3>
+    <a href="{{ url_for('index') }}" class="title" style="background:transparent;padding:1rem 1rem;transition:all .5s ease;font-size:2rem;outline:none;box-shadow:20px 38px 34px -26px rgba(0,0,0,.2);border-radius:255px 15px 225px 15px/15px 225px 15px 255px;color: #41403E; border: 2px solid #41403E;">
+      Go to generate words
+    </a>
+  </h3>
+  <br><br>
+  <h3>OR</h3>
+  <br>
+  <h3 class="title">Login</h3>
+  <div class="box">
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="notification is-danger">
+      {{ messages[0] }}
+    </div>
+    {% endif %}
+    {% endwith %}
+    <form method="POST" action="/login">
+      <div class="field">
+        <div class="control">
+          <input class="input is-large" type="username" name="username" placeholder="Username" autofocus="">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="control">
+          <input class="input is-large" type="password" name="password" placeholder="Password">
+        </div>
+      </div>
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox">
+          Remember me
+        </label>
+      </div>
+      <button class="button is-block is-info is-large is-fullwidth">Login</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
