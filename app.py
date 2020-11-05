@@ -63,7 +63,6 @@ class Team(CRUDMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Text)
     score = db.Column(db.Integer, default=0)
-    words = db.relationship("Word", secondary="players")
 
 
 class Player(CRUDMixin, db.Model):
@@ -71,8 +70,9 @@ class Player(CRUDMixin, db.Model):
     __table_args__ = {'extend_existing': True}
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Text)
+    email = db.Column(db.Text)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
-    team = db.relationship('Team', backref=db.backref('players', lazy=True))
+    team = db.relationship('Team', backref=db.backref('players', lazy="dynamic"))
 
     def __repr__(self):
         return '<Player %r>' % self.name
@@ -87,11 +87,28 @@ class Word(CRUDMixin, db.Model):
     guessed = db.Column(db.Boolean)
     player_id = db.Column(db.Integer, db.ForeignKey(
         'players.id'), nullable=False)
-    player = db.relationship('Player', backref=db.backref('words', lazy=True))
-    teams = db.relationship("Team", secondary="players")
+    player = db.relationship('Player', backref=db.backref('words', lazy="dynamic"))
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
+    team = db.relationship(
+        'Team', backref=db.backref('words', lazy="dynamic"))
 
     def __repr__(self):
         return '<Word %r>' % self.word
+
+
+class LastPlay(CRUDMixin, db.Model):
+    __tablename__ = 'last_play'
+    __table_args__ = {'extend_existing': True}
+    id = db.Column(db.Integer, primary_key=True)
+    player_id = db.Column(db.Integer, db.ForeignKey(
+        'players.id'), nullable=False)
+    player = db.relationship('Player', backref=db.backref('last_play', lazy="dynamic"))
+    team_id = db.Column(db.Integer, db.ForeignKey(
+        'teams.id'), nullable=False)
+    team = db.relationship('Team', backref=db.backref('last_play', lazy="dynamic"))
+
+    def __repr__(self):
+        return '<LastPlay %r>' % self.player.name
 
 
 class MyView(ModelView):
@@ -139,7 +156,7 @@ class WordView(ModelView):
 
         word = self.get_one(word_id)
         word.guessed = True
-        team = word.teams[0]
+        team = word.team
         team.score = team.score + word.score
 
         try:
@@ -161,6 +178,7 @@ admin.add_view(MyView(Team, db.session))
 admin.add_view(MyView(Player, db.session))
 admin.add_view(WordView(Word, db.session))
 admin.add_view(MyView(User, db.session))
+admin.add_view(MyView(LastPlay, db.session))
 admin.add_link(MenuLink(name='Logout', url='/logout'))
 
 
@@ -212,8 +230,11 @@ def get_teams():
 
     teams_info = []
     for team in teams:
-      teams_info.append(
-          {'id': team.id, 'name': team.name, 'score': team.score})
+        info = {'id': team.id, 'name': team.name, 'score': team.score, 'players': []}
+        for player in team.players :
+            info['players'].append({ 'id': player.id, 'name': player.name })
+
+        teams_info.append(info)
 
     return make_response(jsonify(teams_info), 200)
 
@@ -221,26 +242,27 @@ def get_teams():
 @app.route('/api/select_player/', methods=['GET'])
 def get_player():
     import random
-    team_id = request.args.get('team_id')
+    last_play = LastPlay.query.one()
 
-    if team_id :
-        team = Team.query.get(team_id)
-        players = team.players
-
-        amount_of_words = 0
-        random_player = random.choice(players)
-        selected_player = {'id': random_player.id, 'name': random_player.name}
-
-        for player in players:
-            player_words = len(player.words)
-            if player_words > amount_of_words:
-                amount_of_words = player_words
-                selected_player = {'id': player.id, 'name': player.name}
-
-        return make_response(jsonify(selected_player), 200)
+    if last_play :
+        team = last_play.team
+        players = team.players.filter(Player.id != last_play.player_id).all()
     else :
-        error = { "error": "no team_id provided" }
-        return make_response(jsonify(error), 404)
+        team = Team.query.first()
+        players = team.players.all()
+
+    amount_of_words = 0
+    random_player = random.choice(players)
+    selected_player = {'id': random_player.id, 'name': random_player.name}
+
+    for player in players:
+        player_words = len(player.words.all())
+        if player_words > amount_of_words:
+            amount_of_words = player_words
+            selected_player = {'id': player.id, 'name': player.name}
+
+    return make_response(jsonify(selected_player), 200)
+
 
 
 @app.route('/api/save_word/', methods=['POST'])
@@ -252,8 +274,17 @@ def post_word():
     if word and score and player_id :
         player = Player.query.get(player_id)
 
-        new_word = Word(word=word, score=score, player=player, guessed=0)
+        new_word = Word(word=word, score=score, player=player, guessed=0, team=player.team)
         new_word.save()
+        last_play = LastPlay.query.first()
+
+        if last_play :
+            last_play.player = player
+            last_play.team = player.team
+        else :
+            last_play = LastPlay(player=player, team=player.team)
+
+        last_play.save()
 
         message = {"message": f"{word} saved"}
         return make_response(jsonify(message), 200)
