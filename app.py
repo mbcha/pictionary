@@ -5,7 +5,7 @@ from flask_admin.contrib.sqla import ModelView
 
 
 app = Flask(__name__, static_folder='frontend/static', template_folder='frontend')
-app.config.from_object('config')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///pictionary.db'
 db = SQLAlchemy(app)
 
 
