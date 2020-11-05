@@ -6,6 +6,9 @@ from flask_admin.menu import MenuLink
 from flask_login import UserMixin, login_user, LoginManager, logout_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login.utils import current_user
+from flask_admin.helpers import get_form_data
+from flask_admin.babel import gettext
+from markupsafe import Markup
 
 
 app = Flask(__name__, static_folder='frontend/static', template_folder='frontend')
@@ -59,7 +62,7 @@ class Team(CRUDMixin, db.Model):
     __table_args__ = {'extend_existing': True}
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.Text)
-    score = db.Column(db.Integer)
+    score = db.Column(db.Integer, default=0)
     words = db.relationship("Word", secondary="players")
 
 
@@ -85,6 +88,7 @@ class Word(CRUDMixin, db.Model):
     player_id = db.Column(db.Integer, db.ForeignKey(
         'players.id'), nullable=False)
     player = db.relationship('Player', backref=db.backref('words', lazy=True))
+    teams = db.relationship("Team", secondary="players")
 
     def __repr__(self):
         return '<Word %r>' % self.word
@@ -106,11 +110,56 @@ class MyAdminView(AdminIndexView):
         flash('Must be logged in to access the admin pages')
         return redirect(url_for('login'))
 
+class WordView(ModelView):
+    def _format_guessed_now(view, context, model, name):
+        if model.guessed:
+            return 'Guessed'
+
+        guessed_url = url_for('.guessed_view')
+
+        _html = '''
+            <form action="{guessed_url}" method="POST">
+                <input id="word_id" name="word_id"  type="hidden" value="{word_id}">
+                <button type='submit'>Set to guessed</button>
+            </form
+        '''.format(guessed_url=guessed_url, word_id=model.id)
+
+        return Markup(_html)
+
+    column_formatters = {
+        'guessed': _format_guessed_now
+    }
+
+    @expose('guessed_view', methods=['POST'])
+    def guessed_view(self):
+        return_url = self.get_url('.index_view')
+
+        form = get_form_data()
+        word_id = form['word_id']
+
+        word = self.get_one(word_id)
+        word.guessed = True
+        team = word.teams[0]
+        team.score = team.score + word.score
+
+        try:
+            self.session.commit()
+            flash(gettext('Word ID {word_id} guessed!'.format(
+                word_id=word_id)))
+        except Exception as ex:
+            if not self.handle_view_exception(ex):
+                raise
+
+            flash(gettext('Failed to set word ID {word_id} to guessed.'.format(
+                word_id=word_id), error=str(ex)), 'error')
+
+        return redirect(return_url)
+
 
 admin = Admin(app, index_view=MyAdminView(), name='sz-pictionary')
 admin.add_view(MyView(Team, db.session))
 admin.add_view(MyView(Player, db.session))
-admin.add_view(MyView(Word, db.session))
+admin.add_view(WordView(Word, db.session))
 admin.add_view(MyView(User, db.session))
 admin.add_link(MenuLink(name='Logout', url='/logout'))
 
@@ -198,13 +247,13 @@ def get_player():
 def post_word():
     word = request.form.get('word')
     score = request.form.get('score')
-    player_name = request.form.get('player_name')
+    player_id = request.form.get('player_id')
 
-    if word and score and player_name :
-        player = Player.query.filter_by(name=player_name).first()
+    if word and score and player_id :
+        player = Player.query.get(player_id)
 
         new_word = Word(word=word, score=score, player=player, guessed=0)
-        new_word.save
+        new_word.save()
 
         message = {"message": f"{word} saved"}
         return make_response(jsonify(message), 200)
