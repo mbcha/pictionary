@@ -74,6 +74,7 @@ class Player(CRUDMixin, db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
     team = db.relationship('Team', backref=db.backref('players', lazy="dynamic"))
     active = db.Column(db.Boolean, default=False)
+    is_playing = db.Column(db.Boolean, default=False)
 
     def __repr__(self):
         return '<Player %r>' % self.name
@@ -225,6 +226,15 @@ def logout():
     return render_template('login.html')
 
 
+@app.route('/api/set_playing', methods=['POST'])
+def post_playing():
+    active_player = Player.query.filter(Player.active).first()
+    active_player.is_playing = True
+    active_player.save()
+
+    return make_response(jsonify(active_player), 200)
+
+
 @app.route('/api/teams/', methods=['GET'])
 def get_teams():
     teams = Team.query.all()
@@ -261,7 +271,7 @@ def get_teams():
         info = {'id': team.id, 'name': team.name, 'score': team.score, 'players': []}
         for player in team.players :
             active = player.id == active_player.id
-            info['players'].append({ 'id': player.id, 'name': player.name, 'email': player.email, 'active': active })
+            info['players'].append({ 'id': player.id, 'name': player.name, 'email': player.email, 'active': active, 'playing': player.is_playing })
 
         teams_info.append(info)
 
@@ -294,6 +304,7 @@ def post_word():
         last_play.save()
         active_player = Player.query.filter(Player.active).first()
         active_player.active = False
+        active_player.is_playing = False
         active_player.save()
 
         message = {"message": f"{word} saved"}
