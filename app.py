@@ -73,6 +73,7 @@ class Player(CRUDMixin, db.Model):
     email = db.Column(db.Text)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
     team = db.relationship('Team', backref=db.backref('players', lazy="dynamic"))
+    active = db.Column(db.Boolean, default=False)
 
     def __repr__(self):
         return '<Player %r>' % self.name
@@ -227,6 +228,7 @@ def logout():
 @app.route('/api/teams/', methods=['GET'])
 def get_teams():
     teams = Team.query.all()
+    active_player = Player.query.filter(Player.active).first()
 
     import random
     last_play = LastPlay.query.first()
@@ -243,24 +245,28 @@ def get_teams():
 
     players = active_team.players.all()
 
-    amount_of_words = 0
-    random_player = random.choice(players)
-    selected_player = random_player
+    if not active_player :
+        amount_of_words = 0
+        random_player = random.choice(players)
+        active_player = random_player
 
-    for player in players:
-        player_words = len(player.words.all())
-        if player_words > amount_of_words:
-            amount_of_words = player_words
-            selected_player = player
+        for player in players:
+            player_words = len(player.words.all())
+            if player_words > amount_of_words:
+                amount_of_words = player_words
+                active_player = player
 
     teams_info = []
     for team in teams:
         info = {'id': team.id, 'name': team.name, 'score': team.score, 'players': []}
         for player in team.players :
-            active = player.id == selected_player.id
+            active = player.id == active_player.id
             info['players'].append({ 'id': player.id, 'name': player.name, 'email': player.email, 'active': active })
 
         teams_info.append(info)
+
+    active_player.active = True
+    active_player.save()
 
     return make_response(jsonify(teams_info), 200)
 
@@ -285,6 +291,9 @@ def post_word():
             last_play = LastPlay(player=player, team=player.team)
 
         last_play.save()
+        active_player = Player.query.filter(Player.active).first()
+        active_player.active = False
+        active_player.save()
 
         message = {"message": f"{word} saved"}
         return make_response(jsonify(message), 200)
