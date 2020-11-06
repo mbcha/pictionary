@@ -273,9 +273,10 @@ def get_teams():
 
 @app.route('/api/save_word/', methods=['POST'])
 def post_word():
-    word = request.form.get('word')
-    score = request.form.get('score')
-    player_id = request.form.get('player_id')
+    json = request.get_json()
+    word = json['word']
+    score = json['score']
+    player_id = json['player_id']
 
     if word and score and player_id :
         player = Player.query.get(player_id)
