@@ -229,7 +229,7 @@ def get_teams():
     teams = Team.query.all()
 
     import random
-    last_play = LastPlay.query.one()
+    last_play = LastPlay.query.first()
 
     if last_play:
         last_team = last_play.team
