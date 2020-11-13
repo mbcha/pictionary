@@ -226,13 +226,14 @@ def logout():
     return render_template('login.html')
 
 
-@app.route('/api/set_playing', methods=['POST'])
+@app.route('/api/set_playing/', methods=['POST'])
 def post_playing():
     active_player = Player.query.filter(Player.active).first()
     active_player.is_playing = True
     active_player.save()
 
-    return make_response(jsonify(active_player), 200)
+    message = {"message": f"{active_player.name} is now playing"}
+    return make_response(jsonify(message), 200)
 
 
 @app.route('/api/teams/', methods=['GET'])
@@ -253,30 +254,28 @@ def get_teams():
     else:
         active_team = Team.query.first()
 
-    players = active_team.players.all()
-
     if not active_player :
-        amount_of_words = 0
+        players = active_team.players.all()
         random_player = random.choice(players)
         active_player = random_player
+        amount_of_words = len(active_player.words.all())
 
         for player in players:
             player_words = len(player.words.all())
-            if player_words > amount_of_words:
+            if player != active_player and player_words < amount_of_words:
                 amount_of_words = player_words
                 active_player = player
+
+        active_player.active = True
+        active_player.save()
 
     teams_info = []
     for team in teams:
         info = {'id': team.id, 'name': team.name, 'score': team.score, 'players': []}
         for player in team.players :
-            active = player.id == active_player.id
-            info['players'].append({ 'id': player.id, 'name': player.name, 'email': player.email, 'active': active, 'playing': player.is_playing })
+            info['players'].append({ 'id': player.id, 'name': player.name, 'email': player.email, 'active': player.active, 'playing': player.is_playing })
 
         teams_info.append(info)
-
-    active_player.active = True
-    active_player.save()
 
     return make_response(jsonify(teams_info), 200)
 
